@@ -18,6 +18,11 @@ output "bastion_public_ip" {
   value       = aws_instance.bastion.public_ip
 }
 
+output "bastion_security_group_id" {
+  description = "Bastion host security group ID"
+  value       = aws_security_group.bastion.id
+}
+
 output "bastion_ssh_command" {
   description = "SSH command to connect to bastion"
   value       = "ssh -i ${local_file.bastion_private_key.filename} ubuntu@${aws_instance.bastion.public_ip}"
