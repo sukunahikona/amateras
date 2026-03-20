@@ -109,11 +109,11 @@ resource "aws_db_instance" "this" {
 }
 
 ###############################################################################
-# DB Parameter Group (PostgreSQL 16)
+# DB Parameter Group
 ###############################################################################
 resource "aws_db_parameter_group" "postgres" {
-  name   = "${var.project}-${var.environment}-postgres16-params"
-  family = "postgres16"
+  name   = "${var.project}-${var.environment}-postgres${split(".", var.rds.engine_version)[0]}-params"
+  family = "postgres${split(".", var.rds.engine_version)[0]}"
 
   # PostgreSQLの設定例（必要に応じてカスタマイズ）
   parameter {
@@ -132,6 +132,6 @@ resource "aws_db_parameter_group" "postgres" {
   }
 
   tags = {
-    Name = "${var.project}-${var.environment}-postgres16-params"
+    Name = "${var.project}-${var.environment}-postgres${split(".", var.rds.engine_version)[0]}-params"
   }
 }

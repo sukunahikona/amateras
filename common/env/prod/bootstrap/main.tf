@@ -21,7 +21,7 @@ provider "aws" {
 }
 
 module "s3" {
-  source = "../modules/s3"
+  source = "../../../modules/s3"
 
   project           = var.project
   environment       = var.environment
@@ -29,7 +29,7 @@ module "s3" {
 }
 
 module "ssm_parameter" {
-  source = "../modules/ssm_parameter"
+  source = "../../../modules/ssm_parameter"
 
   project     = var.project
   environment = var.environment

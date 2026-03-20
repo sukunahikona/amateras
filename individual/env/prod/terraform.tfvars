@@ -1,3 +1,5 @@
 project     = "amateras"
 environment = "prod"
 region      = "ap-northeast-1"
+github_org  = "sukunahikona"
+github_repo = "spring-batch-app-v1"

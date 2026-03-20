@@ -19,19 +19,19 @@ ec2 = {
   }
 }
 
-# RDSモジュールの設定（PostgreSQL 16系、Multi-AZ）
+# RDSモジュールの設定
 # username/passwordはSSM Parameter Storeから取得
 rds = {
   engine                   = "postgres"
-  engine_version           = "16.6"
+  engine_version           = "16.12"
   instance_class           = "db.t3.micro"
   allocated_storage        = 20
   storage_type             = "gp3"
   db_name                  = "amaterasdb"
   backup_retention_days    = 7
-  #multi_az                 = true
-  multi_az                 = false
+  multi_az                 = true
+  #multi_az                 = false
   skip_final_snapshot      = false
-  snapshot_identifier_name = "amateras-prod-rds-final-snapshot-20260211-003555"
-  #snapshot_identifier_name = null  # 復元する場合はスナップショット名を指定（例: "amateras-prod-rds-final-snapshot-20260211-123456"）
+  #snapshot_identifier_name = "amateras-prod-rds-final-snapshot-20260211-003555"
+  snapshot_identifier_name = null  # 復元する場合はスナップショット名を指定（例: "amateras-prod-rds-final-snapshot-20260211-123456"）
 }
