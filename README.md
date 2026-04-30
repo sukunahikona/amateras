@@ -1,0 +1,187 @@
+# amateras インフラ構成
+
+Spring Batch アプリケーションを AWS 上で定期実行するためのインフラを Terraform で管理するリポジトリです。
+
+---
+
+## ディレクトリ構成
+
+```
+amateras/
+├── common/                          # 共有インフラ（VPC・RDS・IAMなど）
+│   ├── env/prod/                    # prod環境エントリーポイント
+│   │   └── bootstrap/               # Terraformバックエンド（S3）初期構築用
+│   └── modules/
+│       ├── iam/                     # OIDC Provider（GitHub Actions用）
+│       ├── rds/                     # RDS PostgreSQL（Multi-AZ）
+│       ├── s3/                      # S3バケット
+│       ├── ssm_parameter/           # SSM Parameter Store
+│       └── vpc/                     # VPC・サブネット・NAT・Bastion
+│
+└── individual/                      # アプリ個別インフラ（ECR・ECS・EventBridgeなど）
+    ├── env/prod/                    # prod環境エントリーポイント
+    └── modules/
+        ├── ecr/                     # ECRリポジトリ（spring-batch-app-v1）
+        ├── ecs/                     # ECSクラスタ・タスク定義・IAMロール・SG
+        ├── eventbridge/             # EventBridge Schedulerによる定期実行
+        └── iam/                     # GitHub Actions用IAMロール（ECRプッシュ権限）
+```
+
+---
+
+## アーキテクチャ概要
+
+```mermaid
+graph TB
+    subgraph GitHub
+        GHA[GitHub Actions]
+    end
+
+    subgraph AWS
+        subgraph individual スタック
+            ECR[ECR\nspring-batch-app-v1]
+            EBS[EventBridge Scheduler\nsampleJob / userFetchJob\n毎分実行]
+
+            subgraph VPC
+                subgraph プライベートサブネット ap-northeast-1a / 1c
+                    ECS[ECS Fargate\namateras-prod-cluster]
+                    RDS[(RDS PostgreSQL\nMulti-AZ\namaterasdb)]
+                end
+            end
+        end
+
+        subgraph common スタック
+            SSM[SSM Parameter Store\nDB認証情報]
+            CWL[CloudWatch Logs\n/ecs/amateras-prod-spring-batch]
+        end
+    end
+
+    GHA -->|docker push| ECR
+    EBS -->|RunTask| ECS
+    ECS -->|イメージ取得| ECR
+    ECS -->|認証情報取得| SSM
+    ECS -->|DB接続| RDS
+    ECS -->|ログ出力| CWL
+```
+
+---
+
+## Terraformスタック構成
+
+本リポジトリは **2つの独立したTerraformスタック**で管理されています。
+
+| スタック | ディレクトリ | 用途 |
+|---|---|---|
+| common | `common/env/prod/` | VPC・RDS・S3など共有インフラ |
+| individual | `individual/env/prod/` | ECR・ECS・EventBridgeなどアプリ個別インフラ |
+
+`individual` スタックは `common` スタックのリソースを AWS データソースで参照します。
+
+---
+
+## 主要リソース
+
+### common スタック
+
+| リソース | 内容 |
+|---|---|
+| VPC | `10.0.0.0/16`、パブリック×2 / プライベート×2（ap-northeast-1a, 1c） |
+| NAT Gateway | パブリックサブネットに配置 |
+| Bastion | パブリックサブネットに配置（SSH踏み台） |
+| RDS PostgreSQL | `db.t3.micro`、Multi-AZ、暗号化有効、`amaterasdb` |
+| SSM Parameter Store | RDS認証情報（`/amateras/prod/rds/username`, `password`） |
+
+### individual スタック
+
+| リソース | 内容 |
+|---|---|
+| ECR | `amateras-prod-spring-batch-app-v1`（最新30イメージ保持） |
+| ECS クラスタ | `amateras-prod-cluster`（Fargate、Container Insights有効） |
+| ECS タスク定義 | `amateras-prod-spring-batch`（CPU: 512、Memory: 1024） |
+| EventBridge Scheduler | `sampleJob`・`userFetchJob` を毎分実行 |
+| IAM（GitHub Actions） | OIDC経由でECRプッシュ権限を付与 |
+
+---
+
+## Spring Batch ジョブ一覧
+
+| ジョブ名 | 概要 |
+|---|---|
+| `sampleJob` | 基本サンプルジョブ |
+| `sampleContinuingJob` | 継続処理サンプルジョブ |
+| `parallelJob` | 並列処理ジョブ |
+| `productFetchJob` | RDSからProduct情報を取得 |
+| `userFetchJob` | RDSからUser情報を取得 |
+
+---
+
+## Terraform 操作手順
+
+### 初回セットアップ
+
+```bash
+# バックエンド（S3）の初期構築
+cd common/env/prod/bootstrap
+terraform init && terraform apply
+
+# common スタック
+cd common/env/prod
+terraform init && terraform apply
+
+# individual スタック
+cd individual/env/prod
+terraform init && terraform apply
+```
+
+### 通常のapply
+
+```bash
+cd common/env/prod      # または individual/env/prod
+terraform plan
+terraform apply
+```
+
+---
+
+## ECS タスクの手動実行
+
+```bash
+aws ecs run-task \
+  --cluster amateras-prod-cluster \
+  --task-definition amateras-prod-spring-batch \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxxx,subnet-yyyy],securityGroups=[sg-xxxx],assignPublicIp=DISABLED}" \
+  --overrides '{"containerOverrides":[{"name":"spring-batch-app","environment":[{"name":"JOB_NAME","value":"productFetchJob"}]}]}'
+```
+
+サブネットID・SGIDは以下で確認できます。
+
+```bash
+cd individual/env/prod
+terraform output ecs_private_subnet_ids
+terraform output ecs_task_security_group_id
+```
+
+---
+
+## ローカル開発
+
+```bash
+cd individual/modules/ecr/spring-batch-app-v1
+
+# PostgreSQL 起動
+docker compose up -d postgres
+
+# バッチ実行（ジョブ名を指定）
+JOB_NAME=productFetchJob docker compose up batch-app
+```
+
+ローカルDB接続情報：
+
+| 項目 | 値 |
+|---|---|
+| Host | `localhost` |
+| Port | `5432` |
+| Database | `batchdb` |
+| Username | `batchuser` |
+| Password | `batchpass` |

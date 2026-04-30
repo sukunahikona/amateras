@@ -22,3 +22,11 @@ variable "github_repo" {
   description = "GitHub repository name"
   type        = string
 }
+
+variable "batch_cluster" {
+  description = "ECS Spring Batch クラスタ設定"
+  type = object({
+    task_cpu    = number
+    task_memory = number
+  })
+}
