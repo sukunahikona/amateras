@@ -38,21 +38,14 @@ graph TB
     end
 
     subgraph AWS
-        subgraph individual スタック
-            ECR[ECR\nspring-batch-app-v1]
-            EBS[EventBridge Scheduler\nsampleJob / userFetchJob\n毎分実行]
+        ECR[ECR\nspring-batch-app-v1]
+        EBS[EventBridge Scheduler\nsampleJob / userFetchJob\n毎分実行]
+        SSM[SSM Parameter Store\nDB認証情報]
+        CWL[CloudWatch Logs]
 
-            subgraph VPC
-                subgraph プライベートサブネット ap-northeast-1a / 1c
-                    ECS[ECS Fargate\namateras-prod-cluster]
-                    RDS[(RDS PostgreSQL\nMulti-AZ\namaterasdb)]
-                end
-            end
-        end
-
-        subgraph common スタック
-            SSM[SSM Parameter Store\nDB認証情報]
-            CWL[CloudWatch Logs\n/ecs/amateras-prod-spring-batch]
+        subgraph VPC / プライベートサブネット ap-northeast-1a / 1c
+            ECS[ECS Fargate\namateras-prod-cluster]
+            RDS[(RDS PostgreSQL\nMulti-AZ\namaterasdb)]
         end
     end
 
