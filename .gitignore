@@ -2,3 +2,4 @@
 *.tfstate
 *.tfstate.backup
 *.pem
+spring-batch-app-v1

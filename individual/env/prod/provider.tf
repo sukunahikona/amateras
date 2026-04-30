@@ -14,16 +14,9 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project   = var.project
-      ManagedBy = "terraform"
+      Project     = var.project
+      Environment = var.environment
+      ManagedBy   = "terraform"
     }
   }
-}
-
-module "s3" {
-  source = "../modules/s3"
-
-  project           = var.project
-  environment       = var.environment
-  state_bucket_name = var.state_bucket_name
 }
